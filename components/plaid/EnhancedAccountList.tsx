@@ -36,11 +36,20 @@ export default function EnhancedAccountList({ onAddAccount }: EnhancedAccountLis
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchCredentials();
-    setRefreshing(false);
+    try {
+      await fetchCredentials();
+    } catch (error) {
+      console.error('Refresh failed:', error);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleSync = async (credential: PlaidCredential) => {
+    if (syncingItems.has(credential.item_id)) {
+      return; // Already syncing
+    }
+
     setSyncingItems(prev => new Set(prev).add(credential.item_id));
     
     try {
@@ -53,6 +62,7 @@ export default function EnhancedAccountList({ onAddAccount }: EnhancedAccountLis
         );
       }
     } catch (err) {
+      console.error('Sync error:', err);
       Alert.alert(
         'Sync Failed',
         'Failed to sync account data. Please try again.',
@@ -238,7 +248,7 @@ export default function EnhancedAccountList({ onAddAccount }: EnhancedAccountLis
             onPress={() => handleRefreshBalances(item)}
             variant="outline"
             size="small"
-            disabled={!isActive}
+            disabled={!isActive || isSyncing}
             leftIcon={<Zap size={16} color={colors.primary} />}
             style={styles.actionButton}
           />
@@ -248,6 +258,7 @@ export default function EnhancedAccountList({ onAddAccount }: EnhancedAccountLis
             onPress={() => handleDisconnect(item)}
             variant="outline"
             size="small"
+            disabled={isSyncing}
             leftIcon={<Unlink size={16} color={colors.error} />}
             textStyle={{ color: colors.error }}
             style={[styles.actionButton, { borderColor: colors.error }]}

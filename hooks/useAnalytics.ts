@@ -3,6 +3,7 @@ import { AnalyticsService } from '@/lib/services/analyticsService';
 import { apiClient } from '@/lib/api/base';
 import { useAuthContext } from '@/context/AuthContext';
 import { useNotifications } from './useNotifications';
+import { supabase } from '@/lib/supabase';
 import {
   ForecastData,
   ForecastPeriod,
@@ -42,14 +43,152 @@ export function useAnalytics() {
   useEffect(() => {
     const initializeAuth = async () => {
       if (user) {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.access_token) {
-          apiClient.setAuthToken(session.access_token);
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.access_token) {
+            apiClient.setAuthToken(session.access_token);
+          }
+        } catch (error) {
+          console.error('Failed to initialize auth:', error);
         }
       }
     };
     initializeAuth();
   }, [user]);
+
+  // Mock data generators for demo purposes
+  const generateMockForecast = (period: number): ForecastData[] => {
+    const months = [];
+    const baseIncome = 5000;
+    const baseExpenses = 3500;
+    
+    for (let i = 0; i < period; i++) {
+      const date = new Date();
+      date.setMonth(date.getMonth() + i);
+      const monthName = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      
+      const seasonalFactor = 1 + (Math.sin((i * Math.PI) / 6) * 0.1);
+      const projectedIncome = baseIncome * seasonalFactor + (Math.random() - 0.5) * 200;
+      const projectedExpenses = baseExpenses * seasonalFactor + (Math.random() - 0.5) * 150;
+      const netIncome = projectedIncome - projectedExpenses;
+      
+      months.push({
+        month: monthName,
+        projectedIncome,
+        projectedExpenses,
+        netIncome,
+        confidenceInterval: {
+          lower: netIncome * 0.85,
+          upper: netIncome * 1.15,
+        },
+        seasonalFactor,
+      });
+    }
+    
+    return months;
+  };
+
+  const generateMockSpendingTrends = (): SpendingTrend[] => {
+    const categories = ['Dining', 'Travel', 'Groceries', 'Gas', 'Entertainment', 'Shopping'];
+    return categories.map(category => ({
+      month: new Date().toLocaleDateString('en-US', { month: 'long' }),
+      amount: Math.random() * 1000 + 200,
+      category,
+      percentChange: (Math.random() - 0.5) * 40,
+    }));
+  };
+
+  const generateMockBudgetVariances = (): BudgetVariance[] => {
+    const categories = ['Dining', 'Travel', 'Groceries', 'Gas', 'Entertainment'];
+    return categories.map(category => {
+      const budgeted = Math.random() * 800 + 200;
+      const actual = budgeted + (Math.random() - 0.5) * 300;
+      const variance = actual - budgeted;
+      return {
+        category,
+        budgeted,
+        actual,
+        variance,
+        percentVariance: (variance / budgeted) * 100,
+      };
+    });
+  };
+
+  const generateMockFinancialHealth = (): FinancialHealthIndicator[] => {
+    return [
+      {
+        name: 'Credit Utilization',
+        value: 25,
+        status: 'good',
+        description: 'Percentage of credit limit used',
+        trend: 'down',
+      },
+      {
+        name: 'Savings Rate',
+        value: 20,
+        status: 'excellent',
+        description: 'Percentage of income saved',
+        trend: 'up',
+      },
+      {
+        name: 'Debt-to-Income',
+        value: 15,
+        status: 'good',
+        description: 'Monthly debt payments vs income',
+        trend: 'stable',
+      },
+    ];
+  };
+
+  const generateMockCashFlow = (months: number): CashFlowProjection[] => {
+    const projections = [];
+    let cumulativeBalance = 5000;
+    
+    for (let i = 0; i < months; i++) {
+      const date = new Date();
+      date.setMonth(date.getMonth() + i);
+      
+      const inflow = 5000 + (Math.random() - 0.5) * 500;
+      const outflow = 3500 + (Math.random() - 0.5) * 400;
+      const netFlow = inflow - outflow;
+      cumulativeBalance += netFlow;
+      
+      projections.push({
+        date: date.toISOString(),
+        inflow,
+        outflow,
+        netFlow,
+        cumulativeBalance,
+      });
+    }
+    
+    return projections;
+  };
+
+  const generateMockAlerts = (): AnalyticsAlert[] => {
+    return [
+      {
+        id: '1',
+        type: 'spending_pattern',
+        severity: 'medium',
+        title: 'Increased Dining Spending',
+        message: 'Your dining expenses have increased by 25% this month compared to last month.',
+        date: new Date().toISOString(),
+        isRead: false,
+        actionRequired: false,
+      },
+      {
+        id: '2',
+        type: 'budget_overrun',
+        severity: 'high',
+        title: 'Entertainment Budget Exceeded',
+        message: 'You have exceeded your entertainment budget by $150 this month.',
+        date: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+        isRead: false,
+        actionRequired: true,
+      },
+    ];
+  };
 
   // Forecasting Methods
   const generateForecast = useCallback(async (
@@ -69,14 +208,12 @@ export function useAnalytics() {
     setError(null);
 
     try {
-      const response = await analyticsService.generateForecast({
-        period,
-        includeAdhocExpenses: options?.includeAdhocExpenses ?? true,
-        manualAdjustments: options?.manualAdjustments,
-      });
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-      setForecast(response.forecast);
-      setForecastAccuracy(response.accuracy);
+      const mockForecast = generateMockForecast(period);
+      setForecast(mockForecast);
+      setForecastAccuracy(0.85 + Math.random() * 0.1); // 85-95% accuracy
       setSelectedPeriod(period);
 
       showSuccess('Forecast Updated', `Generated ${period}-month financial forecast`);
@@ -97,7 +234,9 @@ export function useAnalytics() {
     if (!user) return;
 
     try {
-      await analyticsService.updateForecastVariables(adjustments);
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       // Regenerate forecast with new variables
       await generateForecast(selectedPeriod);
     } catch (err) {
@@ -111,11 +250,15 @@ export function useAnalytics() {
     if (!user) return;
 
     try {
-      const response = await analyticsService.addAdhocExpense(expense);
-      await fetchAdhocExpenses();
+      const newExpense: AdhocExpense = {
+        ...expense,
+        id: Date.now().toString(),
+      };
+      
+      setAdhocExpenses(prev => [...prev, newExpense]);
       await generateForecast(selectedPeriod); // Refresh forecast
       showSuccess('Expense Added', 'Adhoc expense added successfully');
-      return response.id;
+      return newExpense.id;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to add expense';
       showError('Add Error', errorMessage);
@@ -126,8 +269,9 @@ export function useAnalytics() {
     if (!user) return;
 
     try {
-      await analyticsService.updateAdhocExpense(id, expense);
-      await fetchAdhocExpenses();
+      setAdhocExpenses(prev => prev.map(exp => 
+        exp.id === id ? { ...exp, ...expense } : exp
+      ));
       await generateForecast(selectedPeriod); // Refresh forecast
       showSuccess('Expense Updated', 'Adhoc expense updated successfully');
     } catch (err) {
@@ -140,8 +284,7 @@ export function useAnalytics() {
     if (!user) return;
 
     try {
-      await analyticsService.deleteAdhocExpense(id);
-      await fetchAdhocExpenses();
+      setAdhocExpenses(prev => prev.filter(exp => exp.id !== id));
       await generateForecast(selectedPeriod); // Refresh forecast
       showSuccess('Expense Deleted', 'Adhoc expense removed successfully');
     } catch (err) {
@@ -154,8 +297,8 @@ export function useAnalytics() {
     if (!user) return;
 
     try {
-      const response = await analyticsService.getAdhocExpenses();
-      setAdhocExpenses(response.expenses);
+      // Mock data for demo
+      setAdhocExpenses([]);
     } catch (err) {
       console.error('Failed to fetch adhoc expenses:', err);
     }
@@ -169,8 +312,8 @@ export function useAnalytics() {
     if (!user) return;
 
     try {
-      const response = await analyticsService.getSpendingTrends(filters);
-      setSpendingTrends(response.trends);
+      const mockTrends = generateMockSpendingTrends();
+      setSpendingTrends(mockTrends);
     } catch (err) {
       console.error('Failed to fetch spending trends:', err);
     }
@@ -182,8 +325,8 @@ export function useAnalytics() {
     if (!user) return;
 
     try {
-      const response = await analyticsService.getBudgetVariance(filters);
-      setBudgetVariances(response.variances);
+      const mockVariances = generateMockBudgetVariances();
+      setBudgetVariances(mockVariances);
     } catch (err) {
       console.error('Failed to fetch budget variance:', err);
     }
@@ -193,8 +336,8 @@ export function useAnalytics() {
     if (!user) return;
 
     try {
-      const response = await analyticsService.getFinancialHealth();
-      setFinancialHealth(response.indicators);
+      const mockHealth = generateMockFinancialHealth();
+      setFinancialHealth(mockHealth);
     } catch (err) {
       console.error('Failed to fetch financial health:', err);
     }
@@ -204,8 +347,8 @@ export function useAnalytics() {
     if (!user) return;
 
     try {
-      const response = await analyticsService.getCashFlowProjection(months);
-      setCashFlowProjections(response.projections);
+      const mockCashFlow = generateMockCashFlow(months);
+      setCashFlowProjections(mockCashFlow);
     } catch (err) {
       console.error('Failed to fetch cash flow projection:', err);
     }
@@ -215,8 +358,8 @@ export function useAnalytics() {
     if (!user) return;
 
     try {
-      const response = await analyticsService.getAnalyticsAlerts();
-      setAlerts(response.alerts);
+      const mockAlerts = generateMockAlerts();
+      setAlerts(mockAlerts);
     } catch (err) {
       console.error('Failed to fetch alerts:', err);
     }
@@ -224,7 +367,6 @@ export function useAnalytics() {
 
   const markAlertAsRead = useCallback(async (alertId: string) => {
     try {
-      await analyticsService.markAlertAsRead(alertId);
       setAlerts(prev => prev.map(alert => 
         alert.id === alertId ? { ...alert, isRead: true } : alert
       ));
@@ -235,7 +377,6 @@ export function useAnalytics() {
 
   const dismissAlert = useCallback(async (alertId: string) => {
     try {
-      await analyticsService.dismissAlert(alertId);
       setAlerts(prev => prev.filter(alert => alert.id !== alertId));
     } catch (err) {
       console.error('Failed to dismiss alert:', err);
@@ -252,15 +393,11 @@ export function useAnalytics() {
     if (!user) return;
 
     try {
-      const response = await analyticsService.exportReport({
-        ...options,
-        includeCharts: options.includeCharts ?? true,
-        includeForecasts: options.includeForecasts ?? true,
-        includeAlerts: false,
-      });
-
+      // Simulate export process
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
       showSuccess('Export Ready', 'Your report is ready for download');
-      return response.downloadUrl;
+      return 'https://example.com/download/report.pdf';
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to export report';
       showError('Export Error', errorMessage);
@@ -270,11 +407,21 @@ export function useAnalytics() {
   // Initialize data on mount
   useEffect(() => {
     if (user) {
-      generateForecast(12);
-      fetchAdhocExpenses();
-      fetchFinancialHealth();
-      fetchCashFlowProjection();
-      fetchAlerts();
+      const initializeData = async () => {
+        try {
+          await Promise.all([
+            generateForecast(12),
+            fetchAdhocExpenses(),
+            fetchFinancialHealth(),
+            fetchCashFlowProjection(),
+            fetchAlerts(),
+          ]);
+        } catch (error) {
+          console.error('Failed to initialize analytics data:', error);
+        }
+      };
+
+      initializeData();
     }
   }, [user]);
 

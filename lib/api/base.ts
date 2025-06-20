@@ -50,7 +50,13 @@ export class APIClient {
       return response.json();
     } catch (error) {
       if (error instanceof APIError) throw error;
-      throw new APIError('Network error', 0);
+      
+      // Handle network errors gracefully
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        throw new APIError('Network connection failed. Please check your internet connection.', 0);
+      }
+      
+      throw new APIError('An unexpected error occurred', 0);
     }
   }
 
@@ -77,7 +83,7 @@ export class APIClient {
   }
 }
 
-// Global API client instance
-const apiClient = new APIClient(process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000');
+// Global API client instance with fallback URL
+const apiClient = new APIClient(process.env.EXPO_PUBLIC_API_URL || '/api');
 
 export { apiClient };
